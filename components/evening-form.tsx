@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { ArrowLeft, Star } from "lucide-react"
-import { saveMoodEntry, getCurrentDate } from "@/lib/local-storage"
+import { createClient } from "@/lib/supabase/client"
 
 interface EveningFormProps {
   onBack: () => void
@@ -35,25 +35,31 @@ export default function EveningForm({ onBack }: EveningFormProps) {
     setIsSubmitting(true)
 
     try {
-      const today = getCurrentDate()
+      const supabase = createClient()
 
-      const moodEntry = {
-        first_name: firstName,
-        entry_date: today,
-        entry_type: "evening" as const,
-        actual_mood: selectedMood,
-        satisfaction_rating: satisfaction,
-        comment: comment || undefined,
+      const { data, error } = await supabase
+        .from("mood_entries")
+        .insert({
+          employee_name: firstName,
+          entry_type: "evening",
+          actual_feeling: selectedMood,
+          satisfaction_rating: satisfaction,
+          comment: comment || null,
+          entry_date: new Date().toISOString().split("T")[0], // Format YYYY-MM-DD
+        })
+        .select()
+
+      if (error) {
+        console.error("[v0] Supabase error:", error)
+        throw error
       }
 
-      const savedEntry = saveMoodEntry(moodEntry)
-      console.log("[v0] Evening entry saved:", savedEntry)
-
-      alert("Bilan du soir enregistré avec succès !")
+      console.log("[v0] Evening entry saved to Supabase:", data)
+      alert("Bilan du soir enregistré avec succès dans la base de données !")
       onBack()
     } catch (error) {
-      console.error("[v0] Unexpected error:", error)
-      alert("Erreur inattendue. Veuillez réessayer.")
+      console.error("[v0] Error saving to database:", error)
+      alert("Erreur lors de l'enregistrement en base de données. Veuillez réessayer.")
     } finally {
       setIsSubmitting(false)
     }

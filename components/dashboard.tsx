@@ -4,10 +4,24 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, TrendingUp, Calendar, Smile, Loader2 } from "lucide-react"
-import { getMoodEntries, getCurrentDate, type MoodEntry } from "@/lib/local-storage"
+import { createClient } from "@/lib/supabase/client"
 
 interface DashboardProps {
   onBack: () => void
+}
+
+interface MoodEntry {
+  id: string
+  employee_name: string
+  entry_type: "morning" | "evening"
+  predicted_mood?: string
+  energy_level?: number
+  mood_color?: string
+  actual_feeling?: string
+  satisfaction_rating?: number
+  comment?: string
+  created_at: string
+  entry_date: string
 }
 
 interface DashboardStats {
@@ -31,10 +45,24 @@ export default function Dashboard({ onBack }: DashboardProps) {
 
   const loadDashboardData = async () => {
     try {
-      const allEntries = getMoodEntries()
+      const supabase = createClient()
 
-      // Sort entries by date and type
-      const sortedEntries = allEntries.sort((a, b) => {
+      // Fetch all mood entries from Supabase
+      const { data: allEntries, error } = await supabase
+        .from("mood_entries")
+        .select("*")
+        .order("entry_date", { ascending: false })
+        .order("created_at", { ascending: false })
+
+      if (error) {
+        console.error("[v0] Error fetching mood entries:", error)
+        throw error
+      }
+
+      console.log("[v0] Loaded entries from Supabase:", allEntries)
+
+      // Sort entries by date and type for display
+      const sortedEntries = (allEntries || []).sort((a, b) => {
         const dateCompare = new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime()
         if (dateCompare !== 0) return dateCompare
         return a.entry_type === "morning" ? -1 : 1
@@ -42,7 +70,7 @@ export default function Dashboard({ onBack }: DashboardProps) {
 
       setRecentEntries(sortedEntries.slice(0, 10))
 
-      if (allEntries.length > 0) {
+      if (allEntries && allEntries.length > 0) {
         // Calculate weekly average satisfaction
         const weekAgo = new Date()
         weekAgo.setDate(weekAgo.getDate() - 7)
@@ -59,7 +87,6 @@ export default function Dashboard({ onBack }: DashboardProps) {
         // Calculate current streak (consecutive days with entries)
         const uniqueDates = [...new Set(allEntries.map((entry) => entry.entry_date))].sort().reverse()
         let streak = 0
-        const today = getCurrentDate()
 
         for (let i = 0; i < uniqueDates.length; i++) {
           const expectedDate = new Date()
@@ -200,13 +227,13 @@ export default function Dashboard({ onBack }: DashboardProps) {
                       <div className="text-sm font-medium text-muted-foreground min-w-[80px]">
                         {formatDate(entry.entry_date)}
                       </div>
-                      <div className="text-sm font-medium text-foreground min-w-[80px]">{entry.first_name}</div>
+                      <div className="text-sm font-medium text-foreground min-w-[80px]">{entry.employee_name}</div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground min-w-[50px]">
                           {entry.entry_type === "morning" ? "Matin:" : "Soir:"}
                         </span>
                         <span className="text-lg">
-                          {entry.entry_type === "morning" ? entry.predicted_mood : entry.actual_mood}
+                          {entry.entry_type === "morning" ? entry.predicted_mood : entry.actual_feeling}
                         </span>
                       </div>
                       {entry.entry_type === "morning" && entry.energy_level && (
